@@ -4,10 +4,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from .db import Base
+from sqlalchemy import UniqueConstraint
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        UniqueConstraint('first_name', 'last_name', name='uq_users_name'),
+    )
     id = Column(BigInteger, primary_key=True)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
@@ -15,24 +19,14 @@ class User(Base):
     role = Column(String, nullable=False, default="user")
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
-
-class CrwoRange(Base):
-    __tablename__ = "crwo_ranges"
-    id = Column(BigInteger, primary_key=True)
-    device_id = Column(String, nullable=False)
-    region = Column(String, nullable=False)
-    range_start = Column(Integer, nullable=False)
-    range_end = Column(Integer, nullable=False)
-    current_value = Column(Integer, nullable=False)
-    issued_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
-
-
 class CrwoCommit(Base):
     __tablename__ = "crwo_commits"
     id = Column(BigInteger, primary_key=True)
     region = Column(String, nullable=False)
     value = Column(Integer, nullable=False)
+    user_id = Column(BigInteger, ForeignKey("users.id"))
     device_id = Column(String)
+    forced = Column(Boolean, default=False)
     committed_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
 
 

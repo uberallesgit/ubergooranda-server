@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+# backend/app/routers/crwo.py
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..db import get_session
@@ -6,61 +7,87 @@ from ..auth import current_user
 from .. import models, schemas
 
 router = APIRouter(prefix="/api/v1/crwo", tags=["crwo"])
+
 REGIONS = ["FEO", "EVP", "KER", "SIM", "SEV", "YAL"]
-RANGE_SIZE = 100
 
 
-@router.post("/reserve")
-async def reserve(data: schemas.ReserveIn,
-                  user=Depends(current_user),
-                  session: AsyncSession = Depends(get_session)):
-    max_end = (await session.execute(
-        select(func.coalesce(func.max(models.CrwoRange.range_end), 0))
-    )).scalar()
-    start = max_end + 1
-    end = start + RANGE_SIZE - 1
+@router.post("/check")
+async def check(
+    data: schemas.CrwoCheckIn,
+    user=Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if data.region not in REGIONS:
+        raise HTTPException(400, f"Неверный регион: {data.region}")
 
-    result = {}
-    for region in REGIONS:
+    existing = (await session.execute(
+        select(models.CrwoCommit)
+        .where(
+            models.CrwoCommit.region == data.region,
+            models.CrwoCommit.value == data.value,
+            models.CrwoCommit.forced == False,
+        )
+        .order_by(models.CrwoCommit.committed_at.asc())
+        .limit(1)
+    )).scalar_one_or_none()
+
+    if not existing:
+        return {"status": "free"}
+
+    max_used = (await session.execute(
+        select(func.coalesce(func.max(models.CrwoCommit.value), 0))
+        .where(models.CrwoCommit.region == data.region)
+    )).scalar() or 0
+
+    next_free = max_used + 1
+
+    used_by_user = None
+    if existing.user_id:
+        u = await session.get(models.User, existing.user_id)
+        if u:
+            used_by_user = f"{u.last_name} {u.first_name}".strip()
+
+    return {
+        "status": "taken",
+        "used_by": used_by_user or "неизвестно",
+        "used_at": existing.committed_at.isoformat() if existing.committed_at else None,
+        "next_free": next_free,
+    }
+
+
+@router.post("/commit")
+async def commit(
+    data: schemas.CrwoCommitIn,
+    user=Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    if data.region not in REGIONS:
+        raise HTTPException(400, f"Неверный регион: {data.region}")
+
+    uid = int(user["sub"])
+
+    if not data.forced:
         existing = (await session.execute(
-            select(models.CrwoRange).where(
-                models.CrwoRange.device_id == data.device_id,
-                models.CrwoRange.region == region,
-                models.CrwoRange.current_value < models.CrwoRange.range_end,
+            select(models.CrwoCommit)
+            .where(
+                models.CrwoCommit.region == data.region,
+                models.CrwoCommit.value == data.value,
+                models.CrwoCommit.forced == False,
             )
         )).scalar_one_or_none()
 
         if existing:
-            result[region] = {"current": existing.current_value,
-                              "end": existing.range_end}
-            continue
+            raise HTTPException(409, "Номер уже использован")
 
-        session.add(models.CrwoRange(
-            device_id=data.device_id, region=region,
-            range_start=start, range_end=end, current_value=start - 1,
-        ))
-        result[region] = {"current": start - 1, "end": end}
-        start = end + 1
-        end = start + RANGE_SIZE - 1
-
+    commit_row = models.CrwoCommit(
+        region=data.region,
+        value=data.value,
+        user_id=uid,
+        device_id=data.device_id,
+        forced=data.forced,
+    )
+    session.add(commit_row)
     await session.commit()
-    return result
+    await session.refresh(commit_row)
 
-
-@router.post("/commit")
-async def commit(data: schemas.CommitIn,
-                 user=Depends(current_user),
-                 session: AsyncSession = Depends(get_session)):
-    existing = (await session.execute(
-        select(models.CrwoCommit).where(
-            models.CrwoCommit.region == data.region,
-            models.CrwoCommit.value == data.value,
-        )
-    )).scalar_one_or_none()
-    if existing:
-        return {"ok": True, "duplicate": True}
-
-    session.add(models.CrwoCommit(region=data.region, value=data.value,
-                                  device_id=data.device_id))
-    await session.commit()
-    return {"ok": True}
+    return {"ok": True, "id": commit_row.id}

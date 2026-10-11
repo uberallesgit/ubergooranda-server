@@ -13,16 +13,16 @@ class LoginIn(BaseModel):
     last_name: str
     password: str
 
+class CrwoCheckIn(BaseModel):
+    region: str
+    value: int
 
-class ReserveIn(BaseModel):
-    device_id: str
 
-
-class CommitIn(BaseModel):
+class CrwoCommitIn(BaseModel):
     region: str
     value: int
     device_id: str
-
+    forced: bool = False
 
 class ReadIn(BaseModel):
     last_read_id: int
