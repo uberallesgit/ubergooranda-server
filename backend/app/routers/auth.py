@@ -46,7 +46,7 @@ async def login(data: schemas.LoginIn,
         raise HTTPException(401, "Неверные данные")
 
     return {"token": make_token(user.id, user.role), "role": user.role,
-            "user_id": user.id, "first_name": user.first_name}
+            "user_id": user.id, "first_name": user.first_name, "last_name": user.last_name}
 
 
 @router.get("/me")
