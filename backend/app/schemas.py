@@ -16,6 +16,7 @@ class LoginIn(BaseModel):
 class CrwoCheckIn(BaseModel):
     region: str
     value: int
+    organization: str = "Миранда-Медиа"
 
 
 class CrwoCommitIn(BaseModel):
@@ -23,6 +24,7 @@ class CrwoCommitIn(BaseModel):
     value: int
     device_id: str
     forced: bool = False
+    organization: str = "Миранда-Медиа"
 
 class ReadIn(BaseModel):
     last_read_id: int

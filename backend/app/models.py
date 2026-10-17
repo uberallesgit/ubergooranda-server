@@ -28,6 +28,7 @@ class CrwoCommit(Base):
     device_id = Column(String)
     forced = Column(Boolean, default=False)
     committed_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    organization = Column(String, nullable=False, default="Миранда-Медиа")
 
 
 class ChatRoom(Base):

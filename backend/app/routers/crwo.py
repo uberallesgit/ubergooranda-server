@@ -25,6 +25,7 @@ async def check(
         .where(
             models.CrwoCommit.region == data.region,
             models.CrwoCommit.value == data.value,
+            models.CrwoCommit.organization == data.organization,
             models.CrwoCommit.forced == False,
         )
         .order_by(models.CrwoCommit.committed_at.asc())
@@ -36,7 +37,9 @@ async def check(
 
     max_used = (await session.execute(
         select(func.coalesce(func.max(models.CrwoCommit.value), 0))
-        .where(models.CrwoCommit.region == data.region)
+        .where(models.CrwoCommit.region == data.region,
+        models.CrwoCommit.organization == data.organization,
+        )
     )).scalar() or 0
 
     next_free = max_used + 1
@@ -72,6 +75,7 @@ async def commit(
             .where(
                 models.CrwoCommit.region == data.region,
                 models.CrwoCommit.value == data.value,
+		models.CrwoCommit.organization == data.organization,
                 models.CrwoCommit.forced == False,
             )
         )).scalar_one_or_none()
@@ -82,6 +86,7 @@ async def commit(
     commit_row = models.CrwoCommit(
         region=data.region,
         value=data.value,
+	organization=data.organization,
         user_id=uid,
         device_id=data.device_id,
         forced=data.forced,
